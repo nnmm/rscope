@@ -1,0 +1,11 @@
+[package]
+name = "oscilloscope"
+version = "0.1.0"
+authors = ["nnmm <nnmmgit@gmail.com>"]
+
+[[bin]]
+name = "rs-osc"
+path = "src/main.rs"
+
+[dependencies]
+piston_window = "0.64.0"
