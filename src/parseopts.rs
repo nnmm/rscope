@@ -5,7 +5,7 @@ use std::process;
 #[derive(Debug)]
 pub struct OscOpts {
 	pub magnification: f64,
-	pub samples_per_frame: u32
+	pub samples_per_frame: usize
 }
 
 pub fn get_options() -> OscOpts {

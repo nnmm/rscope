@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["nnmm <nnmmgit@gmail.com>"]
 
 [[bin]]
-name = "rs-oscilloscope"
+name = "rscope"
 path = "src/main.rs"
 
 [dependencies]

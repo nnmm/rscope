@@ -20,7 +20,7 @@ use osc::parseopts::*;
 
 
 fn main() {
-    let OscOpts { magnification: mag, samples_per_frame: spf } = get_options();
+    let o = get_options();
 
 
     // Signal gets a value when the OS sent a INT or TERM signal.
@@ -30,34 +30,22 @@ fn main() {
     let (snd, rcv) = chan::async();
 
     // Create client
-    let (client, _status) = j::Client::new("rs-oscilloscope", j::client_options::NO_START_SERVER)
+    let (client, _status) = j::Client::new("rscope", j::client_options::NO_START_SERVER)
         .unwrap();
+
+    println!("Sample rate is {}", client.sample_rate());
 
     // Register ports. They will be used in a callback that will be
     // called when new data is available.
     let in_a = client.register_port("in_1", j::AudioInSpec::default()).unwrap();
     let in_b = client.register_port("in_2", j::AudioInSpec::default()).unwrap();
 
-
-    let mut out_a = client.register_port("rust_out_l", j::AudioOutSpec::default()).unwrap();
-    let mut out_b = client.register_port("rust_out_r", j::AudioOutSpec::default()).unwrap();
-
-    if let Some(l) = client.port_by_name("SuperCollider:out_1") {
-        println!("{:?}", client.connect_ports(&l, &in_a));
-    }
-    if let Some(r) = client.port_by_name("SuperCollider:out_2") {
-        client.connect_ports(&r, &in_b);
-    }
     let process_callback = move |_: &j::Client, ps: &j::ProcessScope| -> j::JackControl {
-        let mut out_a_p = j::AudioOutPort::new(&mut out_a, ps);
-        let mut out_b_p = j::AudioOutPort::new(&mut out_b, ps);
         let in_a_p = j::AudioInPort::new(&in_a, ps);
         let in_b_p = j::AudioInPort::new(&in_b, ps);
         for (&ls, &rs) in in_a_p.iter().zip(in_b_p.iter()) {
             snd.send((ls, rs));
         }
-        out_a_p.clone_from_slice(&in_a_p);
-        out_b_p.clone_from_slice(&in_b_p);
         j::JackControl::Continue
     };
 
@@ -67,43 +55,69 @@ fn main() {
     // Activate the client, which starts the processing.
     let active_client = j::AsyncClient::new(client, Notifications, process).unwrap();
 
-    ::std::thread::spawn(move || run_graphics(mag, rcv, sdone));
+    ::std::thread::spawn(move || run_graphics(o, rcv, sdone));
 
     // Wait for a signal or for work to be done.
     chan_select! {
-        signal.recv() -> signal => {
-            println!("Received signal: {:?}", signal)
-        },
-        rdone.recv() => {
-            println!("Program completed normally.");
-        }
+        signal.recv() -> signal => {},
+        rdone.recv() => {}
     }
-    println!("Deactivating!");
     active_client.deactivate().unwrap();
 }
 
-fn run_graphics(mag: f64, rcv: chan::Receiver<(f32, f32)>, _: chan::Sender<()>) {
+fn run_graphics(o: OscOpts, rcv: chan::Receiver<(f32, f32)>, _: chan::Sender<()>) {
+    let OscOpts { magnification: mag, samples_per_frame: spf } = o;
     let mut audio = rcv.iter();
     let mut window: PistonWindow =
-        WindowSettings::new("rs-oscilloscope", [640, 480])
+        WindowSettings::new("rscope", [640, 480])
         .exit_on_esc(true).build().unwrap();
+
+    // 255*(1-powf(d,0.077)
+
+    /*
+    ofSetColor(50, 255, 50, 30);
+    shapeMesh.disableColors();
+    ofSetLineWidth(20.0);
+    shapeMesh.draw();
+
+    ofSetColor(50, 255, 50, 50);
+    shapeMesh.disableColors();
+    ofSetLineWidth(5.0);
+    shapeMesh.draw();
+
+    ofSetColor(75, 255, 75, 50);
+    shapeMesh.disableColors();
+    ofSetLineWidth(2.5);
+    shapeMesh.draw();
+
+    shapeMesh.enableColors();
+    ofSetLineWidth(1.0);
+    shapeMesh.draw();
+    */
+    let col_fun = |d: f32| { (1.0-d.powf(0.077)).max(0.0).min(1.0) };
+
+    let mut last_l = 0.0;
+    let mut last_r = 0.0;
     let mut last_x = 0.0;
     let mut last_y = 0.0;
+
     while let Some(e) = window.next() {
         if let Input::Render(rargs) = e {
             let cx = rargs.width as f64/2.0;
             let cy = rargs.height as f64/2.0;
             let s = cmp::min(rargs.width, rargs.height) as f64/2.0;
             window.draw_2d(&e, |c, g| {
-                clear([0.1, 0.1, 0.1, 1.0], g);
-                for (l, r) in audio.by_ref().take(2048) {
-                    let x = mag * s * l as f64 + cx;
-                    let y = mag * s * r as f64 + cy;
-                    let d = (x - last_x).powi(2) + (y - last_y).powi(2);
-                    line([1.0, 0.8, 0.0, 1.0], // red
-                         0.5,
+                clear([0.1, 0.1, 0.1, 0.8], g);
+                for (l, r) in audio.by_ref().take(spf) {
+                    let x = (l as f64).mul_add(mag * s, cx);
+                    let y = (r as f64).mul_add(- mag * s, cy);
+                    let d = ((l - last_l).powi(2) + (r - last_r).powi(2)).sqrt();
+                    line([1.0, 0.8, 0.0, col_fun(d)],
+                         0.7,
                          [last_x, last_y, x, y],
                          c.transform, g);
+                    last_l = l;
+                    last_r = r;
                     last_x = x;
                     last_y = y;
                 }
