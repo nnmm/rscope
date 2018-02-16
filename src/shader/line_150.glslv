@@ -15,8 +15,8 @@ void main () {
     // All points in quad contain the same data:
     // segment start point and segment end point.
     // We determine point position from it's index.
-    float idx = float(aIdx);
-    if (aIdx >= 2u) {
+    float idx = mod(float(aIdx),4.0);
+    if (idx >= 2.0) {
         current = aEnd;
         tang = 1.0;
     } else {
@@ -25,7 +25,8 @@ void main () {
     }
     float side = (mod(idx, 2.0)-0.5)*2.0;
     uvl.xy = vec2(tang, side);
-    uvl.w = floor(idx / 4.0 + 0.5);
+    // TODO: uvl.w = floor(aIdx / 4.0 + 0.5);
+    uvl.w = 0.0;
 
     vec2 dir = aEnd-aStart;
     uvl.z = length(dir);

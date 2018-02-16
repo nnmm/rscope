@@ -15,3 +15,5 @@ gfx = { git = "https://github.com/gfx-rs/gfx.git" }
 gfx_window_glutin = { git = "https://github.com/gfx-rs/gfx.git" }
 glutin ="*"
 jack = "0.5.0"
+structopt = "*"
+structopt-derive = "*"

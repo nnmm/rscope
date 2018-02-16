@@ -2,6 +2,7 @@
 extern crate chan;
 extern crate chan_signal;
 extern crate jack;
+extern crate structopt;
 
 extern crate osc;
 
@@ -13,17 +14,17 @@ use osc::graphics::*;
 use osc::notifications::*;
 use osc::parseopts::*;
 
-
-
+use structopt::StructOpt;
 
 fn main() {
-    let o = get_options();
+    let o = OscOpts::from_args();
 
 
     // Signal gets a value when the OS sent a INT or TERM signal.
     let signal = chan_signal::notify(&[Signal::INT, Signal::TERM]);
     // When our work is complete, send a sentinel value on `sdone`.
-    // let (sdone, rdone) = chan::sync(0);
+    let (sdone, rdone) = chan::sync(0);
+
     let (snd, rcv) = channel();
 
     // Create client
@@ -36,12 +37,12 @@ fn main() {
     // called when new data is available.
     let in_a = client.register_port("in_1", j::AudioInSpec::default()).unwrap();
     let in_b = client.register_port("in_2", j::AudioInSpec::default()).unwrap();
+    let mag = o.magnification;
     let process_callback = move |_: &j::Client, ps: &j::ProcessScope| -> j::JackControl {
         let in_a_p : &[f32] = &j::AudioInPort::new(&in_a, ps);
         let in_b_p : &[f32] = &j::AudioInPort::new(&in_b, ps);
-        let lines = in_a_p.iter().cloned().zip(in_b_p.iter().cloned()).collect();
+        let lines = in_a_p.iter().map(|&l| l*mag).zip(in_b_p.iter().map(|&r| r*mag)).collect();
         snd.send(lines);
-        println!("send");
         j::JackControl::Continue
     };
 
@@ -51,11 +52,16 @@ fn main() {
     // Activate the client, which starts the processing.
     let active_client = j::AsyncClient::new(client, Notifications, process).unwrap();
 
-    ::std::thread::spawn(move || run_graphics(o, rcv));
+    ::std::thread::spawn(move || run_graphics(o, rcv, sdone));
 
     // Wait for a signal or for work to be done.
     chan_select! {
-        signal.recv() -> signal => {}
+        signal.recv() -> signal => {
+            println!("whee, signal");
+        },
+        rdone.recv() => {
+            println!("Program completed normally.");
+        }
     }
     active_client.deactivate().unwrap();
 }

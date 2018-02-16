@@ -5,6 +5,7 @@
 #define TAUR 2.5066282746310002
 #define SQRT2 1.4142135623730951
 
+// todo: make these configurable
 #define uColor vec4(0.03125, 1.0, 0.03125, 1.0)
 #define uIntensity 1.0
 #define uSize 0.012
