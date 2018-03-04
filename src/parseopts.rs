@@ -2,9 +2,12 @@ use getopts::Options;
 use std::env;
 use std::process;
 
-#[derive(Debug)]
+#[derive(StructOpt, Debug)]
+#[structopt(name = "rscope", about = "A simple software oscilloscope that reads from JACK", author = "")]
 pub struct OscOpts {
-	pub magnification: f64,
+	#[structopt(long = "magnification", short = "m", default_value = "1.0")]
+	pub magnification: f32,
+	#[structopt(long = "samples", short = "s", default_value = "1024")]
 	pub samples_per_frame: usize
 }
 
